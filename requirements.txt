@@ -2,4 +2,3 @@ pandas
 plotly
 numpy
 streamlit
-sklearn
