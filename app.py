@@ -3,28 +3,28 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # ---------------------------------------------------------
-# CONFIGURACIÓN DE LA PÁGINA Y ESTILO INDUSTRIAL
+# CONFIGURACIÓN DE LA PÁGINA Y ESTILO CLÍNICO/MÉDICO
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="LogiControl 360 - Gestión de Logística",
-    page_icon="🚚",
+    page_title="CardioPredict 360 - Evaluación de Riesgo Cardíaco",
+    page_icon="🫀",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Estilo visual ejecutivo industrial / logístico
+# Estilo visual clínico en tono oscuro y acentos rojos/azules
 st.markdown("""
     <style>
     .stApp {
-        background-color: #0f172a;
-        color: #f8fafc;
+        background-color: #0b132b;
+        color: #e0e6ed;
     }
     div[data-testid="stMetricValue"] {
         font-size: 1.8rem;
-        color: #f59e0b;
+        color: #ff4d6d;
         font-weight: bold;
     }
     h1, h2, h3 {
@@ -32,7 +32,7 @@ st.markdown("""
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     .stButton>button {
-        background: #d97706;
+        background: #c1121f;
         color: #ffffff;
         font-weight: bold;
         border-radius: 6px;
@@ -41,222 +41,291 @@ st.markdown("""
         transition: all 0.3s ease;
     }
     .stButton>button:hover {
-        background: #b45309;
-        box-shadow: 0px 0px 10px #f59e0b;
+        background: #780000;
+        box-shadow: 0px 0px 10px #ff4d6d;
     }
     </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# GENERACIÓN DE DATOS DE FLOTA Y ENVÍOS (SIMULACIÓN)
+# FUNCIÓN MATEMÁTICA DE PREDICCIÓN (MODELO DE RIESGO)
+# ---------------------------------------------------------
+def calcular_riesgo_cardiaco(edad, sexo, presion, colesterol, hdl, max_hr, fumador, diabetes):
+    """
+    Simulación de una función lógica/algoritmo Framingham de riesgo cardiovascular.
+    Retorna la probabilidad (0-1) y la categoría de riesgo.
+    """
+    # Coeficientes base ajustados
+    p_base = -5.0
+    
+    # Impacto de edad y sexo
+    p_base += (edad * 0.04)
+    if sexo == "Masculino":
+        p_base += 0.35
+        
+    # Presión arterial y colesterol
+    p_base += ((presion - 120) * 0.025) if presion > 120 else 0
+    p_base += ((colesterol - 200) * 0.015) if colesterol > 200 else 0
+    p_base -= ((hdl - 50) * 0.02) # HDL es protector
+    
+    # Frecuencia cardíaca máxima (menor capacidad = mayor riesgo)
+    p_base += ((180 - max_hr) * 0.015) if max_hr < 180 else 0
+    
+    # Estilo de vida y comorbilidades
+    if fumador:
+        p_base += 0.65
+    if diabetes:
+        p_base += 0.80
+        
+    # Función sigmoide para convertir a probabilidad [0, 1]
+    probabilidad = 1 / (1 + np.exp(-p_base))
+    return probabilidad
+
+# ---------------------------------------------------------
+# GENERACIÓN DE BASE DE DATOS SINTÉTICA PARA ANÁLISIS
 # ---------------------------------------------------------
 @st.cache_data
-def generar_datos_logistica(n_envios=1200):
+def generar_dataset_pacientes(n=1000):
     np.random.seed(42)
+    edades = np.random.randint(30, 80, size=n)
+    sexos = np.random.choice(["Masculino", "Femenino"], size=n)
+    presiones = np.random.normal(130, 20, size=n).astype(int)
+    colesteroles = np.random.normal(210, 35, size=n).astype(int)
+    hdls = np.random.normal(50, 12, size=n).astype(int)
+    max_hrs = np.random.normal(150, 22, size=n).astype(int)
+    fumadores = np.random.choice([True, False], size=n, p=[0.25, 0.75])
+    diabetes_list = np.random.choice([True, False], size=n, p=[0.15, 0.85])
     
-    ciudades = ["Lima", "Arequipa", "Trujillo", "Cusco", "Piura", "Chiclayo", "Ica"]
-    estados = ["En Tránsito", "Entregado", "Retrasado", "Pendiente"]
-    vehiculos = [f"Camión-{i:02d}" for i in range(1, 21)]
-    
-    fechas = [datetime.now() - timedelta(hours=int(x)) for x in np.random.randint(0, 168, size=n_envios)]
-    origen = np.random.choice(ciudades, size=n_envios)
-    destino = np.random.choice(ciudades, size=n_envios)
-    
-    # Asegurar que origen y destino no sean iguales
-    destino = np.where(origen == destino, "Arequipa", destino)
-    
-    estado_envio = np.random.choice(estados, size=n_envios, p=[0.35, 0.50, 0.10, 0.05])
-    distancia_km = np.random.uniform(50.0, 1200.0, size=n_envios)
-    consumo_combustible_litros = distancia_km * np.random.uniform(0.25, 0.40, size=n_envios)
-    costo_envio = distancia_km * np.random.uniform(2.5, 5.0, size=n_envios)
-    tiempo_estimado_hrs = distancia_km / np.random.uniform(50.0, 80.0, size=n_envios)
-    
+    probs = []
+    for i in range(n):
+        p = calcular_riesgo_cardiaco(
+            edades[i], sexos[i], presiones[i], colesteroles[i], 
+            hdls[i], max_hrs[i], fumadores[i], diabetes_list[i]
+        )
+        probs.append(p)
+        
     df = pd.DataFrame({
-        'ID_Envio': [f"ENV-{1000+i}" for i in range(n_envios)],
-        'Fecha': fechas,
-        'Origen': origen,
-        'Destino': destino,
-        'Estado': estado_envio,
-        'Vehiculo': np.random.choice(vehiculos, size=n_envios),
-        'Distancia_KM': np.round(distancia_km, 1),
-        'Combustible_L': np.round(consumo_combustible_litros, 1),
-        'Costo_USD': np.round(costo_envio, 2),
-        'Tiempo_Est_Hrs': np.round(tiempo_estimado_hrs, 1)
+        'Edad': edades,
+        'Sexo': sexos,
+        'Presion_Sistolica': presiones,
+        'Colesterol_Total': colesteroles,
+        'HDL': hdls,
+        'FC_Max': max_hrs,
+        'Fumador': fumadores,
+        'Diabetes': diabetes_list,
+        'Probabilidad_Riesgo': probs
     })
-    return df.sort_values(by='Fecha', ascending=False).reset_index(drop=True)
+    
+    df['Categoria_Riesgo'] = pd.cut(
+        df['Probabilidad_Riesgo'], 
+        bins=[-0.1, 0.2, 0.5, 1.0], 
+        labels=['Bajo Riesgo', 'Riesgo Moderado', 'Alto Riesgo']
+    )
+    return df
 
-if 'envios' not in st.session_state:
-    st.session_state.envios = generar_datos_logistica()
-
-df_envios = st.session_state.envios
+df_pacientes = generar_dataset_pacientes()
 
 # ---------------------------------------------------------
-# BARRA LATERAL
+# BARRA LATERAL Y NAVEGACIÓN
 # ---------------------------------------------------------
-st.sidebar.title("🚚 LogiControl 360")
-st.sidebar.caption("Sistema de Control Logístico y Flotas")
+st.sidebar.title("🫀 CardioPredict 360")
+st.sidebar.caption("Sistema de Diagnóstico Predictivo Coronario")
 st.sidebar.markdown("---")
 
 modulo = st.sidebar.radio(
-    "Módulos Operativos:",
+    "Selecciona un Módulo:",
     [
-        "📊 Dashboard Ejecutivo (KPIs)", 
-        "🗺️ Análisis de Rutas y Envíos", 
-        "⛽ Consumo y Eficiencia de Flota", 
-        "📦 Control de Inventario y Almacén"
+        "🩺 Simulador de Evaluación Paciente", 
+        "📊 Epidemiología y Población", 
+        "🔍 Análisis de Factores de Riesgo",
+        "📋 Historial de Expedientes"
     ]
 )
 
 st.sidebar.markdown("---")
-st.sidebar.info("💡 **Estado del Sistema:** Flota activa en carretera. Datos sincronizados.")
+st.sidebar.info("🏥 **Uso Médico:** Herramienta de apoyo a la decisión clínica basada en algoritmos estadísticos de riesgo cardiovascular.")
 
 # ---------------------------------------------------------
-# MÓDULO 1: DASHBOARD EJECUTIVO (KPIS)
+# MÓDULO 1: SIMULADOR DE EVALUACIÓN INDIVIDUAL
 # ---------------------------------------------------------
-if modulo == "📊 Dashboard Ejecutivo (KPIs)":
-    st.title("📊 Centro de Control Logístico")
-    st.markdown("Indicadores clave de rendimiento (KPIs) de la cadena de suministro en tiempo real.")
+if modulo == "🩺 Simulador de Evaluación Paciente":
+    st.title("🩺 Evaluador Individual de Riesgo Cardíaco")
+    st.markdown("Ingresa las métricas fisiológicas del paciente para predecir el riesgo de sufrir un **evento cardíaco en los próximos 5 años**.")
 
-    # KPIs principales
-    total_envios = len(df_envios)
-    entregados_tiempo = len(df_envios[df_envios['Estado'] == 'Entregado'])
-    retrasados = len(df_envios[df_envios['Estado'] == 'Retrasado'])
-    eficiencia_entrega = (entregados_tiempo / total_envios) * 100
-    costo_total = df_envios['Costo_USD'].sum()
+    col_inputs, col_results = st.columns([1, 1])
 
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total de Envíos", f"{total_envios:,}")
-    with col2:
-        st.metric("Tasa de Entrega a Tiempo", f"{eficiencia_entrega:.1f}%")
-    with col3:
-        st.metric("Envíos Retrasados", f"{retrasados}", delta=f"-{retrasados}", delta_color="inverse")
-    with col4:
-        st.metric("Costo Operativo Total", f"${costo_total:,.2f}")
+    with col_inputs:
+        st.subheader("📋 Datos Clínicos del Paciente")
+        
+        c_edad, c_sexo = st.columns(2)
+        with c_edad:
+            edad_p = st.number_input("Edad (años):", min_value=18, max_value=95, value=52)
+        with c_sexo:
+            sexo_p = st.selectbox("Sexo Biológico:", ["Masculino", "Femenino"])
+            
+        c_pa, c_col = st.columns(2)
+        with c_pa:
+            presion_p = st.slider("Presión Sistólica (mmHg):", 90, 200, 135)
+        with c_col:
+            colesterol_p = st.slider("Colesterol Total (mg/dL):", 120, 350, 220)
+            
+        c_hdl, c_fc = st.columns(2)
+        with c_hdl:
+            hdl_p = st.slider("Colesterol HDL (mg/dL):", 20, 100, 45)
+        with c_fc:
+            fc_max_p = st.slider("Frecuencia Cardíaca Máx (BPM):", 80, 210, 145)
+            
+        st.markdown("**Comorbilidades y Hábitos:**")
+        c_fum, c_diab = st.columns(2)
+        with c_fum:
+            fumador_p = st.checkbox("¿Es Fumador Activo?")
+        with c_diab:
+            diabetes_p = st.checkbox("¿Diagnóstico de Diabetes?")
+            
+        btn_evaluar = st.button("Ejecutar Modelo Predictivo", type="primary")
 
-    st.markdown("---")
-
-    # Gráficos
-    c1, c2 = st.columns(2)
-
-    with c1:
-        st.subheader("Estado de Envíos en Tiempo Real")
-        df_est = df_envios['Estado'].value_counts().reset_index()
-        df_est.columns = ['Estado', 'Cantidad']
-        fig_est = px.pie(
-            df_est, 
-            values='Cantidad', 
-            names='Estado', 
-            hole=0.4,
-            color='Estado',
-            color_discrete_map={'Entregado': '#10b981', 'En Tránsito': '#3b82f6', 'Retrasado': '#ef4444', 'Pendiente': '#f59e0b'},
-            template="plotly_dark"
+    with col_results:
+        st.subheader("🎯 Resultado del Diagnóstico Predictivo")
+        
+        # Calcular predicción
+        prob_riesgo = calcular_riesgo_cardiaco(
+            edad_p, sexo_p, presion_p, colesterol_p, hdl_p, fc_max_p, fumador_p, diabetes_p
         )
-        st.plotly_chart(fig_est, use_container_width=True)
+        pct_riesgo = prob_riesgo * 100
 
-    with c2:
-        st.subheader("Costo Operativo por Destino ($)")
-        df_costo_dest = df_envios.groupby('Destino')['Costo_USD'].sum().reset_index()
-        fig_costo = px.bar(
-            df_costo_dest, 
-            x='Destino', 
-            y='Costo_USD', 
-            color='Costo_USD',
-            template="plotly_dark",
-            color_continuous_scale="Oranges"
-        )
-        st.plotly_chart(fig_costo, use_container_width=True)
+        # Gráfico Gauge / Tacómetro
+        fig_gauge = go.Figure(go.Indicator(
+            mode = "gauge+number",
+            value = pct_riesgo,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': "Probabilidad de Evento Cardíaco (%)"},
+            gauge = {
+                'axis': {'range': [None, 100]},
+                'bar': {'color': "#ffffff"},
+                'steps': [
+                    {'range': [0, 20], 'color': "#22c55e"},
+                    {'range': [20, 50], 'color': "#facc15"},
+                    {'range': [50, 100], 'color': "#ef4444"}
+                ],
+            }
+        ))
+        fig_gauge.update_layout(paper_bgcolor="#0b132b", font={'color': "#ffffff"}, margin=dict(l=20, r=20, t=50, b=20))
+        st.plotly_chart(fig_gauge, use_container_width=True)
 
-# ---------------------------------------------------------
-# MÓDULO 2: ANÁLISIS DE RUTAS Y ENVÍOS
-# ---------------------------------------------------------
-elif modulo == "🗺️ Análisis de Rutas y Envíos":
-    st.title("🗺️ Análisis de Rutas y Tiempos de Entrega")
-    st.markdown("Evaluación del tráfico entre orígenes y destinos clave.")
-
-    # Matriz de volumen entre origen y destino
-    df_rutas = df_envios.groupby(['Origen', 'Destino']).size().reset_index(name='Total_Envíos')
-
-    st.subheader("Mapa de Calor de Rutas Más Frecuentes")
-    df_pivot = df_rutas.pivot(index='Origen', columns='Destino', values='Total_Envíos').fillna(0)
-    
-    fig_heatmap = px.imshow(
-        df_pivot, 
-        text_auto=True, 
-        color_continuous_scale="YlOrRd",
-        template="plotly_dark",
-        labels=dict(x="Ciudad Destino", y="Ciudad Origen", color="Frecuencia")
-    )
-    st.plotly_chart(fig_heatmap, use_container_width=True)
+        if pct_riesgo < 20:
+            st.success("🟢 **Bajo Riesgo:** Mantener hábitos saludables y revisiones anuales.")
+        elif pct_riesgo < 50:
+            st.warning("🟡 **Riesgo Moderado:** Se recomienda ajuste de dieta, ejercicio y control de presión arterial.")
+        else:
+            st.error("🔴 **Alto Riesgo:** Intervención médica sugerida. Monitoreo farmacológico preventivo.")
 
 # ---------------------------------------------------------
-# MÓDULO 3: CONSUMO Y EFICIENCIA DE FLOTA
+# MÓDULO 2: EPIDEMIOLOGÍA Y POBLACIÓN
 # ---------------------------------------------------------
-elif modulo == "⛽ Consumo y Eficiencia de Flota":
-    st.title("⛽ Análisis de Consumo de Combustible y Rendimiento")
-    st.markdown("Rendimiento por unidad de transporte (km por litro).")
-
-    df_vehiculos = df_envios.groupby('Vehiculo').agg({
-        'Distancia_KM': 'sum',
-        'Combustible_L': 'sum',
-        'Costo_USD': 'sum'
-    }).reset_index()
-
-    df_vehiculos['Rendimiento_KM_L'] = df_vehiculos['Distancia_KM'] / df_vehiculos['Combustible_L']
+elif modulo == "📊 Epidemiología y Población":
+    st.title("📊 Análisis Epidemiológico de la Población de Estudio")
+    st.markdown("Distribución global de los niveles de riesgo según variables demográficas en la cohorte analizada.")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("Rendimiento Promedio de Combustible (KM/L)")
-        fig_rend = px.bar(
-            df_vehiculos, 
-            x='Vehiculo', 
-            y='Rendimiento_KM_L', 
-            color='Rendimiento_KM_L',
-            template="plotly_dark",
-            color_continuous_scale="Viridis"
+        st.subheader("Prevalencia de Categorías de Riesgo")
+        df_cat = df_pacientes['Categoria_Riesgo'].value_counts().reset_index()
+        df_cat.columns = ['Categoría', 'Total']
+        fig_pie = px.pie(
+            df_cat, 
+            names='Categoría', 
+            values='Total', 
+            hole=0.4,
+            color='Categoría',
+            color_discrete_map={'Bajo Riesgo': '#22c55e', 'Riesgo Moderado': '#facc15', 'Alto Riesgo': '#ef4444'},
+            template="plotly_dark"
         )
-        st.plotly_chart(fig_rend, use_container_width=True)
+        st.plotly_chart(fig_pie, use_container_width=True)
 
     with col2:
-        st.subheader("Consumo Total de Combustible por Vehículo (Litros)")
-        fig_l = px.bar(
-            df_vehiculos, 
-            x='Vehiculo', 
-            y='Combustible_L', 
+        st.subheader("Riesgo Promedio por Grupo de Edad")
+        df_pacientes['Rango_Edad'] = pd.cut(df_pacientes['Edad'], bins=[20, 40, 60, 80], labels=['20-40', '41-60', '61-80'])
+        df_edad_g = df_pacientes.groupby('Rango_Edad')['Probabilidad_Riesgo'].mean().reset_index()
+        df_edad_g['Riesgo_%'] = df_edad_g['Probabilidad_Riesgo'] * 100
+        
+        fig_bar = px.bar(
+            df_edad_g, 
+            x='Rango_Edad', 
+            y='Riesgo_%', 
+            color='Riesgo_%',
+            color_continuous_scale="Reds",
             template="plotly_dark",
-            color_discrete_sequence=['#f59e0b']
+            title="Riesgo Promedio (%) por Rango Etario"
         )
-        st.plotly_chart(fig_l, use_container_width=True)
+        st.plotly_chart(fig_bar, use_container_width=True)
 
 # ---------------------------------------------------------
-# MÓDULO 4: CONTROL DE INVENTARIO Y ALMACÉN
+# MÓDULO 3: ANÁLISIS DE FACTORES DE RIESGO
 # ---------------------------------------------------------
-elif modulo == "📦 Control de Inventario y Almacén":
-    st.title("📦 Nivel de Stock y Capacidad de Almacén")
-    st.markdown("Simulación de capacidad disponible en centros de distribución regionales.")
+elif modulo == "🔍 Análisis de Factores de Riesgo":
+    st.title("🔍 Correlación entre Factores Clínicos y Riesgo")
+    st.markdown("Exploración multivariada para identificar biomarcadores con mayor peso predicitvo.")
 
-    np.random.seed(99)
-    almacenes = ["Almacén Central Lima", "CD Arequipa", "CD Trujillo", "CD Cusco"]
-    capacidad_total = [10000, 5000, 4000, 3000]
-    ocupacion_actual = [8200, 4100, 2100, 2800]
+    col_g1, col_g2 = st.columns(2)
 
-    df_almacen = pd.DataFrame({
-        'Almacén': almacenes,
-        'Capacidad_Total': capacidad_total,
-        'Ocupación_Actual': ocupacion_actual
-    })
-    df_almacen['Porcentaje_Uso'] = (df_almacen['Ocupación_Actual'] / df_almacen['Capacidad_Total']) * 100
+    with col_g1:
+        st.subheader("Presión Arterial vs. Colesterol Total")
+        fig_scatter = px.scatter(
+            df_pacientes, 
+            x='Presion_Sistolica', 
+            y='Colesterol_Total', 
+            color='Categoria_Riesgo',
+            color_discrete_map={'Bajo Riesgo': '#22c55e', 'Riesgo Moderado': '#facc15', 'Alto Riesgo': '#ef4444'},
+            template="plotly_dark",
+            labels={'Presion_Sistolica': 'Presión Sistólica (mmHg)', 'Colesterol_Total': 'Colesterol (mg/dL)'}
+        )
+        st.plotly_chart(fig_scatter, use_container_width=True)
 
-    for idx, row in df_almacen.iterrows():
-        st.subheader(f"🏬 {row['Almacén']}")
-        pct = row['Porcentaje_Uso'] / 100
-        st.progress(pct, text=f"Capacidad Utilizada: {row['Ocupación_Actual']:,} / {row['Capacidad_Total']:,} unidades ({row['Porcentaje_Uso']:.1f}%)")
-        if row['Porcentaje_Uso'] > 85:
-            st.warning("⚠️ Almacén con capacidad crítica (próximo a saturarse).")
+    with col_g2:
+        st.subheader("Impacto del Tabaquismo y Diabetes")
+        df_hab = df_pacientes.groupby(['Fumador', 'Diabetes'])['Probabilidad_Riesgo'].mean().reset_index()
+        df_hab['Riesgo_%'] = df_hab['Probabilidad_Riesgo'] * 100
+        df_hab['Fumador'] = df_hab['Fumador'].map({True: 'Fumador', False: 'No Fumador'})
+        df_hab['Diabetes'] = df_hab['Diabetes'].map({True: 'Con Diabetes', False: 'Sin Diabetes'})
+
+        fig_hab = px.bar(
+            df_hab, 
+            x='Fumador', 
+            y='Riesgo_%', 
+            color='Diabetes', 
+            barmode='group',
+            template="plotly_dark"
+        )
+        st.plotly_chart(fig_hab, use_container_width=True)
+
+# ---------------------------------------------------------
+# MÓDULO 4: HISTORIAL DE EXPEDIENTES
+# ---------------------------------------------------------
+elif modulo == "📋 Historial de Expedientes":
+    st.title("📋 Registro de Expedientes y Cohorte de Estudio")
+    st.markdown("Exploración de la base de datos anonimizada de pacientes procesados.")
+
+    # Filtros
+    filtro_cat = st.selectbox("Filtrar por Categoria de Riesgo:", ["Todas", "Bajo Riesgo", "Riesgo Moderado", "Alto Riesgo"])
+    
+    df_f = df_pacientes.copy()
+    if filtro_cat != "Todas":
+        df_f = df_f[df_f['Categoria_Riesgo'] == filtro_cat]
+
+    st.dataframe(df_f, use_container_width=True)
+
+    # Descargar CSV
+    csv_exp = df_f.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Exportar Base de Datos (CSV)",
+        data=csv_exp,
+        file_name="pacientes_riesgo_cardiaco.csv",
+        mime="text/csv"
+    )
 
 # ---------------------------------------------------------
 # PIE DE PÁGINA
 # ---------------------------------------------------------
 st.markdown("---")
-st.caption("LogiControl 360 | Plataforma de Inteligencia Logística | Desarrollado con Streamlit, Pandas, NumPy y Plotly | 2026")
+st.caption("CardioPredict 360 | Plataforma de Analítica Predictiva de Salud Cardiovascular | Desarrollado con Streamlit, Pandas, NumPy y Plotly | 2026")
